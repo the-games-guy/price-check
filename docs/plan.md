@@ -149,13 +149,13 @@ On the NucBox you clone the repo and add `<clone>/skills` to `skills.external_di
 
 | Cadence | Schedule |
 |---|---|
-| daily | `0 8 * * *` |
-| every other day | `0 8 */2 * *` |
-| weekly | `0 8 * * 1` |
+| daily | `every day at 8am` |
+| every other day | `every 2d` |
+| weekly | `every monday 8am` |
 | fortnightly | `every 14d` |
 | monthly | `0 8 1 * *` |
 
-During the build I'll check against `hermes cron create --help` that `every 14d` is valid. If it isn't, fortnightly falls back to a weekly job that the helper skips on alternate weeks.
+These forms are all valid in Hermes (checked against its cron docs). The `every 2d` and `every 14d` intervals count from when the job is created.
 
 ## Build order (Phase 1)
 1. `SKILL.md`:
