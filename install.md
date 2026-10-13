@@ -31,9 +31,43 @@ Z "hermes -p assistant chat -q 'Two tests, show raw results only. 1) With your w
 
 | Result | Meaning | Action |
 |---|---|---|
-| Tool works, curl blocked | Browsing runs in the gateway, outside the sandbox allowlist | Nothing to open. Skip step 4. |
-| Both blocked by the proxy | Browsing runs inside the sandbox | Step 4: add retailer domains to the global allowlist |
+| Tool works, curl blocked | Page reading runs in the gateway, outside the sandbox allowlist | Nothing to open. Skip step 4. |
+| Tool says "ddgs is a search-only backend and cannot extract URL content" | No extract backend is configured. **This was ZORO's result on 2026-10-13.** | Do step 0a, then rerun test 1 only. |
+| Both blocked by the proxy | Page reading runs inside the sandbox | Step 4: add retailer domains to the global allowlist |
 | Tool gets 403 / captcha / "access denied" | The retailer blocks bots | Expected for some stores (JB Hi-Fi, Big W, Kmart often do). The skill records them as `failed`. If most stores block, the skill isn't worth running in Phase 1. Stop and look at Phase 2's SerpApi source instead. |
+
+A curl 403 (`CONNECT tunnel failed`) from the sandbox is the egress allowlist working as intended. Leave it closed; the skill doesn't use the terminal for fetching.
+
+## 0a. Give Amy a page-extract backend (Tavily)
+
+Amy's web search uses DuckDuckGo (`ddgs`), which can search but can't open pages. Keep search on ddgs (free) and add Tavily for extraction only:
+- The free tier is 1,000 credits/month with no card.
+- A basic extract costs 0.2 credits per URL, so about 5,000 pages/month.
+- A check opens 10–18 pages, so that's roughly 300 product checks a month.
+
+1. Sign up at tavily.com and copy the API key.
+2. Add the key to Amy's **profile** `.env`. Check first, never blind-append:
+   ```bash
+   Z "grep -q '^TAVILY_API_KEY=' ~/.hermes/profiles/assistant/.env && echo PRESENT || echo safe"
+   Z "printf '\nTAVILY_API_KEY=%s\n' 'PASTE_KEY' >> ~/.hermes/profiles/assistant/.env && chmod 600 ~/.hermes/profiles/assistant/.env"
+   ```
+   `TAVILY_API_KEY` is a tool-category variable, so Hermes keeps it out of the sandbox. Never add it to `docker_forward_env`.
+3. In `~/.hermes/profiles/assistant/config.yaml`, set only the extract backend. Merge this into an existing `web:` block if there is one:
+   ```yaml
+   web:
+     search_backend: "ddgs"
+     extract_backend: "tavily"
+   ```
+   `hermes -p assistant tools` → "Web Search & Extract" does the same through the wizard.
+4. Restart Amy's gateway the usual way, then start a fresh session and rerun **test 1 only**:
+   ```bash
+   Z "hermes -p assistant chat -q 'With your web_extract tool, open https://www.officeworks.com.au/ and report the page title or the exact raw error.' -Q"
+   ```
+   - A page title means it works. Skip step 4; no retailer domains need opening.
+   - A proxy or connection error naming `api.tavily.com` means the gateway's calls also go through the egress proxy. Add `"api.tavily.com"` to the global `proxy.extra_allowed_hosts`, run `hermes egress setup --restart`, and test again.
+   - Errors about `extract_backend` mean 0.20.4 may predate the per-capability keys. Use `hermes -p assistant tools` instead and check `hermes -p assistant setup` shows the backend.
+
+Price pages are often JavaScript-heavy. If extracts come back without prices, ask for Tavily's advanced extract (0.4 credits/URL). The Hermes browser tools (`browser_navigate`) are the heavier fallback, but they need a browser plugin enabled and running a local Chromium on the N150 is expensive.
 
 ## 1. Copy the skill in (no symlinks, no `external_dirs`)
 
