@@ -1,11 +1,13 @@
 # Australian retailers — hints
 
-A starting list, not a limit: include any AU retailer that meets the hard rules. Use the **Name** column as the canonical retailer name in snapshots so runs stay comparable.
+This is a starting list, not a limit: include any AU retailer that meets the hard rules. Use it to decide where to look.
 
-## Name normalisation
-- Lowercase and strip `pty ltd`, `pty. ltd.`, `australia`, `au`, `.com.au`, `.com`, `www.`, punctuation and spaces before comparing; then use the canonical name below.
-- Same business under different domains = one retailer (e.g. `jbhifi.com.au` and "JB Hi-Fi").
-- Marketplaces: one retailer per seller — `eBay – <seller>`, `Amazon AU – <seller>`, `Catch – <seller>`, `Kogan Marketplace – <seller>`. Sold by the platform itself: `Amazon AU`, `Catch`, `Kogan`.
+## How retailers are identified
+- The helper identifies a retailer by the **domain of the URL**, so you never need to normalise names yourself. The domains below get the canonical name shown. For any other domain, put a sensible name in `retailer`.
+- The canonical names live in `RETAILERS` in `scripts/price_check.py`. If you add a row here, add it there too.
+- **Marketplaces:** each seller counts as its own retailer — `eBay – <seller>`, `Amazon AU – <seller>`, `Catch – <seller>`, `Kogan Marketplace – <seller>`. Put the seller in `seller`. If the platform sells it itself, the name is `Amazon AU`, `Catch` or `Kogan`.
+- These are rejected automatically: comparison sites (below), and overseas stores such as amazon.com, ebay.com and aliexpress.com.
+- **Egress:** if Amy's browsing runs inside the sandbox, every domain here must be on the global `proxy.extra_allowed_hosts` list (see install.md, step 4).
 
 ## By category
 

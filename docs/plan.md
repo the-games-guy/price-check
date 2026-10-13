@@ -1,5 +1,15 @@
 # Price Check — a Hermes Agent skill on the NucBox
 
+> **Update 2026-10-13: fitted to Amy on ZORO.** The sections below are the original design. Where they differ, these changes win:
+> - **Where it runs.** It's a skill on Amy's `assistant` profile, not a new profile or sub-agent. It holds no credentials and touches no money, so a separate profile would only add a gateway, container and login on the N150.
+> - **Install.** Files are copied into `~/.hermes/profiles/assistant/skills/`, with no `external_dirs` and no symlinks inside `skills/`. Data lives in `/home/zoro/price-check-data`, bound read-write to `/root/price-check-data` in the sandbox. The old `~/.hermes/data/...` path is read-only inside the sandbox. See `install.md`.
+> - **Part of Phase 2 moved into Phase 1.** `scripts/price_check.py` now does `add/update/pause/resume/remove/list/show/find/plan/commit/oneoff`: filtering, one per retailer, maths, comparison and message formatting. The agent's only output is an offers file.
+>   - What was left out: the SerpApi/eBay sources and `.env` keys. Those remain the Phase 2 trigger if browsing coverage is poor.
+>   - Why: Amy has repeatedly produced plausible but invented diagnoses, and change detection is exactly where that would cause false alerts.
+> - **Retailer identity is the URL domain** (plus seller for marketplaces), so name variations can't cause phantom changes.
+> - **Schedules are 5-field cron** with a per-product minute off the hour (`50 8 * * 1` and so on). Fortnightly is the 1st and 15th, every other day is odd dates, and the unverified `every 2d` / `every 14d` forms aren't used.
+> - **The tests use unittest** (standard library), so pytest isn't needed.
+
 ## Context
 You want to track Australian retail prices for products you choose and get a Telegram message whenever a price moves, up or down. Instead of a standalone app, this runs as an agent skill inside **Hermes Agent**, which is already hosted on your NucBox.
 
