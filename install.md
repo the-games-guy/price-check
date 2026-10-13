@@ -38,36 +38,38 @@ Z "hermes -p assistant chat -q 'Two tests, show raw results only. 1) With your w
 
 A curl 403 (`CONNECT tunnel failed`) from the sandbox is the egress allowlist working as intended. Leave it closed; the skill doesn't use the terminal for fetching.
 
-## 0a. Give Amy a page-extract backend (Tavily)
+## 0a. Give Amy a page-extract backend (Firecrawl)
 
-Amy's web search uses DuckDuckGo (`ddgs`), which can search but can't open pages. Keep search on ddgs (free) and add Tavily for extraction only:
-- The free tier is 1,000 credits/month with no card.
-- A basic extract costs 0.2 credits per URL, so about 5,000 pages/month.
-- A check opens 10–18 pages, so that's roughly 300 product checks a month.
+Amy's web search uses DuckDuckGo (`ddgs`), which can search but can't open pages. Keep search on ddgs (free) and use **Firecrawl** for extraction only.
 
-1. Sign up at tavily.com and copy the API key.
+**Tested on ZORO, 2026-10-13:**
+
+| Backend | JB Hi-Fi | Big W |
+|---|---|---|
+| Tavily | Page loaded, but the price was empty because it's added by JavaScript | "Failed to fetch url" (blocked) |
+| Firecrawl | $219 | $185 (special, was $219) |
+
+Firecrawl renders the page in a browser, so it works for both stores. Its free tier is 1,000 credits/month at 1 credit per page. A check opens about 10–15 pages, so that's roughly 65–100 product checks a month. Keep most products weekly. A daily product uses around 300–450 credits a month on its own.
+
+1. Sign up at firecrawl.dev and copy the API key.
 2. Add the key to Amy's **profile** `.env`. Check first, never blind-append:
    ```bash
-   Z "grep -q '^TAVILY_API_KEY=' ~/.hermes/profiles/assistant/.env && echo PRESENT || echo safe"
-   Z "printf '\nTAVILY_API_KEY=%s\n' 'PASTE_KEY' >> ~/.hermes/profiles/assistant/.env && chmod 600 ~/.hermes/profiles/assistant/.env"
+   Z "grep -q '^FIRECRAWL_API_KEY=' ~/.hermes/profiles/assistant/.env && echo PRESENT || echo safe"
+   Z "printf '\nFIRECRAWL_API_KEY=%s\n' 'PASTE_KEY' >> ~/.hermes/profiles/assistant/.env && chmod 600 ~/.hermes/profiles/assistant/.env"
    ```
-   `TAVILY_API_KEY` is a tool-category variable, so Hermes keeps it out of the sandbox. Never add it to `docker_forward_env`.
-3. In `~/.hermes/profiles/assistant/config.yaml`, set only the extract backend. Merge this into an existing `web:` block if there is one:
-   ```yaml
-   web:
-     search_backend: "ddgs"
-     extract_backend: "tavily"
-   ```
-   `hermes -p assistant tools` → "Web Search & Extract" does the same through the wizard.
-4. Restart Amy's gateway the usual way, then start a fresh session and rerun **test 1 only**:
+   Hermes treats this as a tool credential and keeps it out of the sandbox. Never add it to `docker_forward_env`.
+3. Set the backends. This backs up the config first:
    ```bash
-   Z "hermes -p assistant chat -q 'With your web_extract tool, open https://www.officeworks.com.au/ and report the page title or the exact raw error.' -Q"
+   Z "cp ~/.hermes/profiles/assistant/config.yaml ~/.hermes/profiles/assistant/config.yaml.bak-\$(date +%Y%m%d-%H%M) && hermes -p assistant config set web.search_backend ddgs && hermes -p assistant config set web.extract_backend firecrawl && grep -n -A4 '^web:' ~/.hermes/profiles/assistant/config.yaml"
    ```
-   - A page title means it works. Skip step 4; no retailer domains need opening.
-   - A proxy or connection error naming `api.tavily.com` means the gateway's calls also go through the egress proxy. Add `"api.tavily.com"` to the global `proxy.extra_allowed_hosts`, run `hermes egress setup --restart`, and test again.
-   - Errors about `extract_backend` mean 0.20.4 may predate the per-capability keys. Use `hermes -p assistant tools` instead and check `hermes -p assistant setup` shows the backend.
+4. Restart Amy's gateway (`hermes -p assistant gateway restart`), then start a fresh session and test a JavaScript-priced store and a bot-blocking one:
+   ```bash
+   Z "hermes -p assistant chat -q 'Open these two pages with web_extract and report raw: URL, product title, price shown, any error. Do not guess prices. https://www.jbhifi.com.au/products/apple-airpods-4 https://www.bigw.com.au/product/apple-airpods-4/p/245249' -Q"
+   ```
+   - Both prices showing means it works. Skip step 4; no retailer domains need opening.
+   - A proxy or connection error naming `api.firecrawl.dev` means the gateway's calls also go through the egress proxy. Add it to the global `proxy.extra_allowed_hosts`, run `hermes egress setup --restart`, and test again.
 
-Price pages are often JavaScript-heavy. If extracts come back without prices, ask for Tavily's advanced extract (0.4 credits/URL). The Hermes browser tools (`browser_navigate`) are the heavier fallback, but they need a browser plugin enabled and running a local Chromium on the N150 is expensive.
+If a store still blocks Firecrawl, the skill records it as `failed`. If that becomes common, Phase 2 adds Google Shopping (SerpApi) as a source.
 
 ## 1. Copy the skill in (no symlinks, no `external_dirs`)
 
