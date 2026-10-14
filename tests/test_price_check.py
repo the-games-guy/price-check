@@ -294,6 +294,29 @@ class CLI(unittest.TestCase):
         (self.home / "snapshots" / f"{slug}.json").write_text(json.dumps(legacy))
         self.assertEqual(self.commit(slug, [offer(BAN, 189)])[1], "[SILENT]")
 
+    def test_files_are_readable_by_others(self):
+        slug = self.add_rayban()["slug"]
+        self.commit(slug, [offer(BAN, 189)])
+        for f in ("products.json", f"snapshots/{slug}.json", f"logs/{slug}.last.txt"):
+            mode = (self.home / f).stat().st_mode & 0o777
+            self.assertEqual(mode & 0o044, 0o044, f"{f} mode {oct(mode)}")
+
+    def test_product_name_rejected_as_model(self):
+        for q in ("AirPods Pro 3", "Ray-Ban Wayfarer"):
+            code, _, err = self.run_cli("add", "--type", "model", "--query", q)
+            self.assertEqual(code, 2, q)
+            self.assertIn("looks like a product name", err)
+        for q in ("MFHP4X/A", "RB2140 901", "WH-1000XM5", "A2084"):
+            self.assertFalse(pc.looks_like_name(q), q)
+        slug = self.add_rayban()["slug"]
+        self.assertEqual(self.run_cli("update", slug, "--query", "AirPods Pro")[0], 2)
+
+    def test_members_only_store_dropped(self):
+        slug = self.add_rayban()["slug"]
+        _, out, _ = self.commit(slug, [offer("https://www.costco.com.au/x", 150), offer(BAN, 189)])
+        self.assertNotIn("costco", out.lower())
+        self.assertIn("members-only", (self.home / "logs" / f"{slug}.last.txt").read_text())
+
     def test_money_is_exact(self):
         slug = self.add_rayban()["slug"]
         self.commit(slug, [offer(BAN, 0.1, 0.2)])

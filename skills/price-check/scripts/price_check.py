@@ -119,6 +119,8 @@ PLATFORM_SELLER_NAMES = {"", "amazon", "amazon au", "amazon.com.au", "amazon aus
 COMPARISON_SITES = {"google.com", "google.com.au", "shopping.google.com", "staticice.com.au",
                     "pricehipster.com", "getprice.com.au", "shopbot.com.au", "pricespy.com.au",
                     "pricerunner.com", "ozbargain.com.au"}
+# Stores that only sell to paying members: not a price "any customer" can get.
+MEMBERS_ONLY = {"costco.com.au"}
 FOREIGN_STORES = {"amazon.com", "amazon.co.uk", "ebay.com", "ebay.co.uk", "aliexpress.com",
                   "temu.com", "wish.com", "walmart.com", "bestbuy.com", "newegg.com"}
 NOT_NEW = re.compile(
@@ -230,6 +232,12 @@ def gtin14(code: str) -> str:
     return re.sub(r"\D", "", code or "").zfill(14)
 
 
+def looks_like_name(query: str) -> bool:
+    """Model/SKU codes are mostly letters+digits ('MFHP4X/A', 'RB2140 901',
+    'WH-1000XM5'). A plain word of 4+ letters ('AirPods', 'Pro') means a name."""
+    return any(re.fullmatch(r"[A-Za-z]{4,}", tok) for tok in re.split(r"[\s/,]+", query))
+
+
 def slugify(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40].strip("-")
     return s or "product"
@@ -291,13 +299,38 @@ def split_list(values) -> list[str]:
 
 # ----------------------------------------------------------------- storage
 
+def settle(path: Path, mode: int = 0o644) -> None:
+    """Make a file we wrote readable, and owned like the data folder.
+
+    The Hermes sandbox runs as root, but the data folder belongs to the host
+    user (zoro). Without this, everything the agent writes is root-owned and
+    mkstemp's 0600 mode makes it unreadable on the host."""
+    try:
+        os.chmod(path, mode)
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            st = home().stat()
+            if (st.st_uid, st.st_gid) != (0, 0):
+                os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+
+
+def ensure_dirs() -> Path:
+    base = home()
+    for sub in ("snapshots", "work", "logs"):
+        d = base / sub
+        if not d.exists():
+            d.mkdir(parents=True, exist_ok=True)
+            settle(d, 0o755)
+    return base
+
+
 @contextlib.contextmanager
 def locked():
-    base = home()
-    (base / "snapshots").mkdir(parents=True, exist_ok=True)
-    (base / "work").mkdir(exist_ok=True)
-    (base / "logs").mkdir(exist_ok=True)
-    with open(base / ".lock", "w") as fh:
+    base = ensure_dirs()
+    lock = base / ".lock"
+    with open(lock, "a") as fh:
+        settle(lock, 0o664)
         if fcntl:
             fcntl.flock(fh, fcntl.LOCK_EX)
         try:
@@ -320,6 +353,7 @@ def write_json(path: Path, data) -> None:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
+    settle(Path(tmp))
     os.replace(tmp, path)
 
 
@@ -356,6 +390,8 @@ def retailer_identity(offer: dict) -> tuple[str, str]:
         raise InputError("comparison site, not a retailer (open the retailer's own page)")
     if domain_match(host, FOREIGN_STORES):
         raise InputError("overseas store")
+    if domain_match(host, MEMBERS_ONLY):
+        raise InputError("members-only store")
     market = domain_match(host, MARKETPLACES)
     if market:
         prefix, platform_name = MARKETPLACES[market]
@@ -709,6 +745,11 @@ def product_from_args(a, slug: str = "") -> dict:
     query = (a.query or "").strip()
     if not query:
         raise InputError("query is required")
+    if st in ("model", "sku") and looks_like_name(query):
+        raise InputError(
+            f"'{query}' looks like a product name, not a {st} number. Use --type name "
+            "(with --include keywords), or find the manufacturer's model number first "
+            "(e.g. MFHP4X/A, RB2140, WH-1000XM5) and use that.")
     if st == "barcode":
         query = re.sub(r"[\s-]", "", query)
         if not gtin_valid(query):
@@ -897,6 +938,7 @@ def write_log(slug: str, notes: list[str], when: str) -> Path:
     path = home() / "logs" / f"{slug}.last.txt"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{when}\n" + "\n".join(notes) + "\n", encoding="utf-8")
+    settle(path)
     return path
 
 
