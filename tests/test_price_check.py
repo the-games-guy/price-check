@@ -317,6 +317,26 @@ class CLI(unittest.TestCase):
         self.assertNotIn("costco", out.lower())
         self.assertIn("members-only", (self.home / "logs" / f"{slug}.last.txt").read_text())
 
+    def test_pin_models_edits_once(self):
+        import subprocess
+        slug = self.add_rayban()["slug"]
+        self.run_cli("set-job", slug, "job123")
+        log = self.home / "hermes-calls.txt"
+        fake = self.home / "fake-hermes"
+        fake.write_text(f"#!/bin/sh\necho \"$@\" >> {log}\n")
+        fake.chmod(0o755)
+        pin = [sys.executable, str(ROOT / "host" / "pin_models.py"), "--home", str(self.home),
+               "--hermes", str(fake)]
+        self.assertEqual(subprocess.run(pin).returncode, 0)
+        self.assertEqual(subprocess.run(pin).returncode, 0)  # second run: nothing to do
+        calls = log.read_text().splitlines()
+        self.assertEqual(calls, ["-p assistant cron edit job123 --model claude-haiku-5-5"])
+        products = json.loads((self.home / "products.json").read_text())["products"]
+        self.assertEqual(products[0]["cron_model"], "claude-haiku-5-5")
+        self.run_cli("set-job", slug, "job456")  # a new job must be pinned again
+        subprocess.run(pin)
+        self.assertEqual(log.read_text().splitlines()[-1].split()[4], "job456")
+
     def test_money_is_exact(self):
         slug = self.add_rayban()["slug"]
         self.commit(slug, [offer(BAN, 0.1, 0.2)])

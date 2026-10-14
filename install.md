@@ -198,7 +198,22 @@ You should get a confirmation with the cron job id, then a 🆕 baseline message
 
 Plain cron is used instead of `every 2d` / `every 14d` because those interval forms aren't verified on 0.20.4.
 
-**Model:** jobs created by Amy's `cronjob` tool run on Amy's default model (Sonnet). The tool can't pin a model. To force a different one, recreate the job host-side with `hermes -p assistant cron create ... --skill price-check --model <model> --deliver telegram`, using the `schedule` and `prompt` that `price_check.py add` printed, then `price_check.py set-job <slug> <new id>`.
+**Model: scheduled checks run on Claude Haiku 5.5.** Hermes doesn't let the agent pick a job's model, so a host-side script pins it with `hermes cron edit <id> --model`:
+- It reads `products.json` and only edits jobs it hasn't pinned yet.
+- A new tracker, or a re-created job, is picked up automatically.
+- The first baseline check (run in chat when you add a product) uses Amy's own model.
+
+```bash
+Z "python3 ~/price-check/host/pin_models.py --dry-run"     # shows the cron edit it would run
+Z "python3 ~/price-check/host/pin_models.py"               # pins now
+Z "hermes -p assistant cron list | grep -A10 'price-check:'"
+```
+Then add it to zoro's crontab so new trackers are pinned within the hour. Cron has a minimal PATH, so give it hermes's full path:
+```bash
+Z "which hermes"     # e.g. /home/zoro/.local/bin/hermes; use it below
+Z "(crontab -l 2>/dev/null | grep -v pin_models; echo '7 * * * * python3 /home/zoro/price-check/host/pin_models.py --hermes /home/zoro/.local/bin/hermes >> /home/zoro/price-check-data/logs/pin-models.log 2>&1') | crontab - && crontab -l | grep pin_models"
+```
+To use a different model, pass `--model <id> --force` (or set `PRICE_CHECK_MODEL`). If Haiku misses retailers (more "⚠ not rechecked" lines, or ⚠️ no-results messages), switch back with `--model claude-sonnet-5-5 --force`.
 
 **Cost:** each run opens 10–18 pages on Claude, billed to extra usage. A few weekly products cost little. Several daily products add up, so keep daily for things you're actively waiting to buy.
 

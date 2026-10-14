@@ -798,6 +798,8 @@ def cmd_set_job(a) -> int:
     with locked():
         data = load_products()
         p = find_product(data, a.slug)
+        if p.get("cron_job_id") != a.job_id:
+            p["cron_model"] = None  # new job: host-side pin_models.py sets its model
         p["cron_job_id"] = a.job_id
         save_products(data)
     print(json.dumps({"slug": a.slug, "cron_job_id": a.job_id}))

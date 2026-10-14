@@ -23,6 +23,7 @@ skills/price-check/
   references/schemas.md        # offers file, products.json and snapshot formats
   references/retailers-au.md   # AU retailers and comparison sites
   templates/message.md         # what the messages look like (produced by the script)
+host/pin_models.py             # host-side: pins price-check cron jobs to Haiku
 tests/test_price_check.py      # python3 -m unittest discover -s tests
 install.md                     # ZORO / Amy setup
 docs/plan.md                   # original design notes

@@ -58,6 +58,7 @@ Offer format: `references/schemas.md`. Retailer hints: `references/retailers-au.
 4. Run `PC set-job <slug> <job id>`.
 5. Run Procedure B now and send the baseline message it produces **verbatim**. Don't add retailers, prices or notes of your own. A retailer the script dropped is not in the result, even if you saw its price. If the commit printed a `notes:` line, you may add one line after the message, e.g. "6 pages were dropped. Ask me why." The reasons are in `/root/price-check-data/logs/<slug>.last.txt`.
 6. Confirm what is tracked, how it is searched, the cadence (in words, from `add`) and the job id.
+   Scheduled checks run on Claude Haiku: a host-side script pins each price-check job's model within the hour. You can't set a job's model yourself, so don't try, and don't change it.
 
 ## Procedure B: Run a price check for `<slug>`
 1. Run `PC plan <slug>`. It prints the product, the URLs to recheck, the offers file path and the exact commit command. If `product.active` is false, reply `[SILENT]` and stop.
